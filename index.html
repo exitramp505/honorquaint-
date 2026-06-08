@@ -406,8 +406,10 @@
 
         if (navigator.canShare && navigator.canShare({files:[file]})) {
           try{
-            const shareImageText = currentQuote.side === 'sell'
-              ? `${fmtMoney(currentQuote.usdAmount)} payout\n\n${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
+            const shareImageText = currentQuote.side === 'buy'
+              ? `${fmtMoney(currentQuote.usdAmount)} payout
+
+${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
               : `${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`;
 
             await navigator.share({
