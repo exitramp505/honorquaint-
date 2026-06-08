@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Honorquaint Quote</title>
+  <style>
+    :root{
+      --blue:#007bff;
+      --blue-h:#0069d9;
+      --green:#28a745;
+      --green-h:#218838;
+      --ink:#222;
+      --muted:#586170;
+      --bg:#f8f9fb;
+      --radius:12px;
+      --gap:10px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+      text-align:center;
+    }
+    #app{
+      max-width:600px;
+      margin:0 auto;
+      padding:1rem;
+    }
+    label{
+      display:block;
+      font-size:.9rem;
+      color:#555;
+      margin-bottom:.25rem;
+      text-align:left;
+    }
+    .field{margin-bottom:var(--gap);}
+    select,input{
+      width:100%;
+      font-size:1rem;
+      padding:.45rem;
+      border:1px solid #ccc;
+      border-radius:8px;
+      background:#fff;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:var(--gap);
+      margin-bottom:var(--gap);
+    }
+
+    .btnbar{
+      display:flex;
+      justify-content:center;
+      gap:.4rem;
+      flex-wrap:nowrap;
+      margin-top:.7rem;
+    }
+    button{
+      font-size:.95rem;
+      padding:.55rem .85rem;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+      color:#fff;
+      font-weight:600;
+      transition:background .2s ease;
+      min-width:115px;
+      flex:0 1 auto;
+      white-space:nowrap;
+    }
+    #btnShare,#btnShareImg{background:var(--blue)}
+    #btnShare:hover,#btnShareImg:hover{background:var(--blue-h)}
+    #btnFetch{background:var(--green)}
+    #btnFetch:hover{background:var(--green-h)}
+
+    .meta{margin:.5rem 0 .3rem;color:#555;font-size:.92rem}
+
+    .quote-card{
+      margin-top:1rem;
+      padding:1rem;
+      border-radius:var(--radius);
+      background:linear-gradient(to bottom,#ffffff 78%,#e8ebf0 100%);
+      box-shadow:0 0 8px rgba(0,0,0,.1);
+      text-align:center;
+    }
+    .quote-main .line{margin:6px 0}
+    .quote-main .big{font-weight:700}
+    .quote-main .huge{font-size:1.6rem;font-weight:800}
+    .quote-main .muted{color:var(--muted)}
+
+    @media (max-width:380px){
+      .btnbar button{padding:.45rem .6rem;min-width:100px;font-size:.9rem}
+      .grid2{gap:8px}
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Row 1: Asset | Mode -->
+    <div class="grid2">
+      <div class="field">
+        <label for="assetSel">Asset</label>
+        <select id="assetSel">
+          <option value="BTC">BTC</option>
+          <option value="LTC">LTC</option>
+          <option value="SOL">SOL</option>
+          <option value="XMR">XMR</option>
+          <option value="ETH">ETH</option>
+          <option value="USDT">USDT</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="mode">Mode</label>
+        <select id="mode">
+          <option value="sell_usdToAsset">Sell • USD → Asset</option>
+          <option value="sell_assetToUsd">Sell • Asset → USD</option>
+          <option value="buy_usdToAsset">Buy • USD → Asset</option>
+          <option value="buy_assetToUsd">Buy • Asset → USD</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Row 2: Upcharge | Fee -->
+    <div class="grid2">
+      <div class="field">
+        <label for="upcharge">Upcharge (%)</label>
+        <input id="upcharge" type="number" value="6" step="0.1" />
+      </div>
+      <div class="field">
+        <label for="txfee">Transaction Fee (USD)</label>
+        <input id="txfee" type="number" value="1.5" step="0.5" />
+      </div>
+    </div>
+
+    <!-- Row 3: Amount / Spot -->
+    <div id="usdWrap" class="field">
+      <label id="usdLabel" for="amtusd">Amount (USD)</label>
+      <input id="amtusd" type="number" placeholder="Enter USD amount" />
+    </div>
+    <div id="btcWrap" class="field" style="display:none">
+      <label id="btcLabel" for="amtbtc">Amount (Asset)</label>
+      <input id="amtbtc" type="number" placeholder="Enter asset amount" />
+    </div>
+
+    <div class="field">
+      <label for="spot">Spot Price</label>
+      <input id="spot" type="number" step="any" />
+    </div>
+
+    <div class="meta">
+      <span id="priceStatus">Waiting for price...</span><br />
+      Auto-refresh <span id="refreshCountdown">60</span>s
+    </div>
+
+    <div class="btnbar">
+      <button id="btnShare">Share Text</button>
+      <button id="btnShareImg">Share Image</button>
+      <button id="btnFetch">Refresh</button>
+    </div>
+
+    <div id="quoteCard" class="quote-card">
+      <div id="qBox"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const $ = id => document.getElementById(id);
+      const moneyTrim = n => {
+        if (!isFinite(n)) return '—';
+        const s = parseFloat(n).toLocaleString(undefined,{
+          style:'currency',currency:'USD',maximumFractionDigits:2
+        });
+        return s.replace(/\.00$/,'');
+      };
+      const fmtMoney = n => isFinite(n)
+        ? n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2})
+        : '—';
+      const fmtAsset = n => isFinite(n)
+        ? n.toLocaleString(undefined,{minimumFractionDigits:5,maximumFractionDigits:5})
+        : '—';
+
+      const ASSET_PAIRS = {
+        BTC:'XXBTZUSD', LTC:'XLTCZUSD', SOL:'SOLUSD', XMR:'XXMRZUSD', ETH:'XETHZUSD', USDT:'USDTZUSD'
+      };
+
+      let countdown = 60;
+      let timer;
+      let lastShareTitle = 'Quote';   // will be set by calc()
+
+      function getModeState(){
+        const mode = $('mode').value;
+        const isBuy = mode.startsWith('buy_');
+        const isUsdInput = mode.endsWith('usdToAsset');
+        return { mode, side: isBuy ? 'buy' : 'sell', isUsdInput };
+      }
+
+      function syncMode(){
+        const { side, isUsdInput } = getModeState();
+        $('usdWrap').style.display = isUsdInput ? 'block' : 'none';
+        $('btcWrap').style.display = isUsdInput ? 'none'  : 'block';
+
+        $('usdLabel').textContent = side === 'sell' ? 'Amount (USD)' : 'Receive Amount (USD)';
+        $('amtusd').placeholder = side === 'sell' ? 'Enter USD amount' : 'Enter USD amount to receive';
+
+        $('btcLabel').textContent = side === 'sell' ? 'Amount (Asset)' : 'Sell Amount (Asset)';
+        $('amtbtc').placeholder = side === 'sell' ? 'Enter asset amount' : 'Enter asset amount to sell';
+      }
+
+      function calc(){
+        const spot = parseFloat($('spot').value) || 0;
+        const up   = parseFloat($('upcharge').value) || 0;
+        const fee  = parseFloat($('txfee').value) || 0;
+        const { side, isUsdInput } = getModeState();
+        const usd  = parseFloat($('amtusd').value) || 0;
+        const btc  = parseFloat($('amtbtc').value) || 0;
+        const asset= $('assetSel').value;
+
+        const sellPrice = spot * (1 + up/100);
+        const buyPrice = Math.max(spot * (1 - up/100), 0);
+        let usdAmount = 0;
+        let assetAmount = 0;
+        let lineOne = '';
+        let lineTwo = '';
+        let rateLabel = '';
+        let spreadLabel = side === 'sell' ? 'Upcharge' : 'Discount';
+
+        if (side === 'sell'){
+          if (isUsdInput){
+            const net = Math.max(usd - fee, 0);
+            usdAmount = usd;
+            assetAmount = sellPrice ? net / sellPrice : 0;
+          } else {
+            assetAmount = btc;
+            usdAmount = (assetAmount * sellPrice) + fee;
+          }
+          lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
+          lineTwo = `YOU RECEIVE <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
+          rateLabel = `${fmtMoney(sellPrice)} <span class="muted">/ ${asset}</span>`;
+          lastShareTitle = `${fmtAsset(assetAmount)} ${asset}`;
+        } else {
+          if (isUsdInput){
+            usdAmount = usd;
+            assetAmount = buyPrice ? (usdAmount + fee) / buyPrice : 0;
+          } else {
+            assetAmount = btc;
+            usdAmount = Math.max((assetAmount * buyPrice) - fee, 0);
+          }
+          lineOne = `YOU SEND <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
+          lineTwo = `YOU RECEIVE <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
+          rateLabel = `${fmtMoney(buyPrice)} <span class="muted">/ ${asset}</span>`;
+          lastShareTitle = `${fmtMoney(usdAmount)} payout`;
+        }
+
+        $('qBox').innerHTML = `
+          <div class="quote-main">
+            <div class="line">${lineOne}</div>
+            <div class="line">${lineTwo}</div>
+            <div class="line">${rateLabel}</div>
+            <div class="line">${spreadLabel}: <span class="big">${up}%</span></div>
+            <div class="line">Tx Fee: <span class="big">${moneyTrim(fee)}</span></div>
+            <div class="line muted">${new Date().toLocaleString()}</div>
+          </div>`;
+      }
+
+      async function fetchPrice(asset){
+        const pair = ASSET_PAIRS[asset];
+        const r = await fetch(`https://api.kraken.com/0/public/Ticker?pair=${pair}`,{cache:'no-store'});
+        const j = await r.json();
+        const key = Object.keys(j.result || {})[0];
+        return parseFloat(j.result?.[key]?.c?.[0]);
+      }
+
+      async function fetchAsset(){
+        const asset = $('assetSel').value;
+        const s = $('priceStatus');
+        s.textContent = `Fetching ${asset}…`;
+        try{
+          const price = await fetchPrice(asset);
+          $('spot').value = price.toFixed(2);
+          s.textContent = `${asset} updated • $${price.toFixed(2)}`;
+          calc();
+        }catch(e){
+          s.textContent = 'Fetch failed';
+        }
+      }
+
+      function startCountdown(){
+        $('refreshCountdown').textContent = countdown;
+        countdown = (countdown <= 0) ? 60 : countdown - 1;
+        setTimeout(startCountdown, 1000);
+      }
+      function startAutoRefresh(){
+        if (timer) clearInterval(timer);
+        timer = setInterval(fetchAsset, 60000);
+        countdown = 60;
+        startCountdown();
+      }
+
+      $('assetSel').addEventListener('change', fetchAsset);
+      ['spot','upcharge','txfee','amtusd','amtbtc'].forEach(id => $(id).addEventListener('input', calc));
+      $('mode').addEventListener('change', () => { syncMode(); calc(); });
+      $('btnFetch').addEventListener('click', fetchAsset);
+
+      $('btnShare').addEventListener('click', async () => {
+        const text = $('quoteCard').innerText.trim();
+        if (navigator.share) {
+          try{ await navigator.share({ title:'Quote', text }); }catch{}
+        } else {
+          await navigator.clipboard.writeText(text);
+          alert('Quote copied.');
+        }
+      });
+
+      $('btnShareImg').addEventListener('click', async () => {
+        const canvas = await html2canvas($('quoteCard'));
+        const blob = await new Promise(r => canvas.toBlob(r,'image/png'));
+        const file = new File([blob],'quote.png',{type:'image/png'});
+        const title = lastShareTitle || 'Quote';
+        if (navigator.canShare && navigator.canShare({files:[file]})) {
+          try{ await navigator.share({files:[file], title}); }catch{}
+        } else {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'quote.png';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }
+      });
+
+      syncMode();
+      fetchAsset();
+      startAutoRefresh();
+    });
+  </script>
+</body>
+</html>
