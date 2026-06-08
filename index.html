@@ -407,7 +407,8 @@
           try{
             await navigator.share({
               files:[file],
-              title
+              title,
+              text: `${fmtMoney(currentQuote.usdAmount)} payout\n\n${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
             });
           }catch{}
         } else {
