@@ -1,36 +1,28 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+const CACHE_NAME = "honorquaint-quote-v1";
+const FILES_TO_CACHE = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest"
+];
 
-\f0\fs24 \cf0 const CACHE = 'btc-quote-v1';\
-const ASSETS = [\
-  './',\
-  './index.html',\
-  './manifest.webmanifest',\
-  'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',\
-];\
-\
-self.addEventListener('install', (e) => \{\
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));\
-\});\
-\
-self.addEventListener('activate', (e) => \{\
-  e.waitUntil(caches.keys().then(keys => \
-    Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))\
-  );\
-\});\
-\
-self.addEventListener('fetch', (e) => \{\
-  e.respondWith(\
-    caches.match(e.request).then((r) => \
-      r || fetch(e.request).then((res) => \{\
-        const copy = res.clone();\
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(()=>\{\});\
-        return res;\
-      \}).catch(()=> caches.match('./index.html'))\
-    )\
-  );\
-\});}
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(FILES_TO_CACHE))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.map(key => key !== CACHE_NAME ? caches.delete(key) : null))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", event => {
+  event.respondWith(
+    caches.match(event.request).then(cached => cached || fetch(event.request))
+  );
+});

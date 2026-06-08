@@ -172,6 +172,7 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const $ = id => document.getElementById(id);
+
       const moneyTrim = n => {
         if (!isFinite(n)) return '—';
         const s = parseFloat(n).toLocaleString(undefined,{
@@ -179,20 +180,40 @@
         });
         return s.replace(/\.00$/,'');
       };
+
       const fmtMoney = n => isFinite(n)
         ? n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2})
         : '—';
+
       const fmtAsset = n => isFinite(n)
         ? n.toLocaleString(undefined,{minimumFractionDigits:5,maximumFractionDigits:5})
         : '—';
 
       const ASSET_PAIRS = {
-        BTC:'XXBTZUSD', LTC:'XLTCZUSD', SOL:'SOLUSD', XMR:'XXMRZUSD', ETH:'XETHZUSD', USDT:'USDTZUSD'
+        BTC:'XXBTZUSD',
+        LTC:'XLTCZUSD',
+        SOL:'SOLUSD',
+        XMR:'XXMRZUSD',
+        ETH:'XETHZUSD',
+        USDT:'USDTZUSD'
       };
 
       let countdown = 60;
       let timer;
-      let lastShareTitle = 'Quote';   // will be set by calc()
+      let lastShareTitle = 'Quote';
+
+      // Store the current calculated values for clean share text.
+      let currentQuote = {
+        side: 'sell',
+        asset: 'BTC',
+        usdAmount: 0,
+        assetAmount: 0,
+        rateText: '—',
+        up: 6,
+        feeText: '$1.50',
+        lineOneText: '',
+        lineTwoText: ''
+      };
 
       function getModeState(){
         const mode = $('mode').value;
@@ -204,7 +225,7 @@
       function syncMode(){
         const { side, isUsdInput } = getModeState();
         $('usdWrap').style.display = isUsdInput ? 'block' : 'none';
-        $('btcWrap').style.display = isUsdInput ? 'none'  : 'block';
+        $('btcWrap').style.display = isUsdInput ? 'none' : 'block';
 
         $('usdLabel').textContent = side === 'sell' ? 'Amount (USD)' : 'Receive Amount (USD)';
         $('amtusd').placeholder = side === 'sell' ? 'Enter USD amount' : 'Enter USD amount to receive';
@@ -215,21 +236,27 @@
 
       function calc(){
         const spot = parseFloat($('spot').value) || 0;
-        const up   = parseFloat($('upcharge').value) || 0;
-        const fee  = parseFloat($('txfee').value) || 0;
+        const up = parseFloat($('upcharge').value) || 0;
+        const fee = parseFloat($('txfee').value) || 0;
         const { side, isUsdInput } = getModeState();
-        const usd  = parseFloat($('amtusd').value) || 0;
-        const btc  = parseFloat($('amtbtc').value) || 0;
+        const usd = parseFloat($('amtusd').value) || 0;
+        const btc = parseFloat($('amtbtc').value) || 0;
         const asset= $('assetSel').value;
 
         const sellPrice = spot * (1 + up/100);
         const buyPrice = Math.max(spot * (1 - up/100), 0);
+
         let usdAmount = 0;
         let assetAmount = 0;
         let lineOne = '';
         let lineTwo = '';
+        let lineOneText = '';
+        let lineTwoText = '';
         let rateLabel = '';
-        let spreadLabel = side === 'sell' ? 'Upcharge' : 'Discount';
+        let rateText = '';
+
+        // Always label this as Upcharge, per latest direction.
+        const spreadLabel = 'Upcharge';
 
         if (side === 'sell'){
           if (isUsdInput){
@@ -240,9 +267,16 @@
             assetAmount = btc;
             usdAmount = (assetAmount * sellPrice) + fee;
           }
+
           lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
           lineTwo = `YOU RECEIVE <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
+
+          lineOneText = `YOUR PAYMENT: ${fmtMoney(usdAmount)} USD`;
+          lineTwoText = `YOU RECEIVE: ${fmtAsset(assetAmount)} ${asset}`;
+
           rateLabel = `${fmtMoney(sellPrice)} <span class="muted">/ ${asset}</span>`;
+          rateText = `${fmtMoney(sellPrice)} / ${asset}`;
+
           lastShareTitle = `${fmtAsset(assetAmount)} ${asset}`;
         } else {
           if (isUsdInput){
@@ -252,11 +286,30 @@
             assetAmount = btc;
             usdAmount = Math.max((assetAmount * buyPrice) - fee, 0);
           }
+
           lineOne = `YOU SEND <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
           lineTwo = `YOU RECEIVE <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
+
+          lineOneText = `YOU SEND: ${fmtAsset(assetAmount)} ${asset}`;
+          lineTwoText = `YOU RECEIVE: ${fmtMoney(usdAmount)} USD`;
+
           rateLabel = `${fmtMoney(buyPrice)} <span class="muted">/ ${asset}</span>`;
+          rateText = `${fmtMoney(buyPrice)} / ${asset}`;
+
           lastShareTitle = `${fmtMoney(usdAmount)} payout`;
         }
+
+        currentQuote = {
+          side,
+          asset,
+          usdAmount,
+          assetAmount,
+          rateText,
+          up,
+          feeText: moneyTrim(fee),
+          lineOneText,
+          lineTwoText
+        };
 
         $('qBox').innerHTML = `
           <div class="quote-main">
@@ -288,6 +341,7 @@
           calc();
         }catch(e){
           s.textContent = 'Fetch failed';
+          calc();
         }
       }
 
@@ -296,6 +350,7 @@
         countdown = (countdown <= 0) ? 60 : countdown - 1;
         setTimeout(startCountdown, 1000);
       }
+
       function startAutoRefresh(){
         if (timer) clearInterval(timer);
         timer = setInterval(fetchAsset, 60000);
@@ -303,15 +358,39 @@
         startCountdown();
       }
 
+      function buildShareText(){
+        const lines = [
+          `${currentQuote.asset} Quote • ${new Date().toLocaleString()}`,
+          currentQuote.lineOneText,
+          currentQuote.lineTwoText,
+          currentQuote.rateText,
+          `Upcharge: ${currentQuote.up}%`,
+          `Tx Fee: ${currentQuote.feeText}`
+        ];
+
+        return lines.filter(Boolean).join('\n');
+      }
+
       $('assetSel').addEventListener('change', fetchAsset);
       ['spot','upcharge','txfee','amtusd','amtbtc'].forEach(id => $(id).addEventListener('input', calc));
-      $('mode').addEventListener('change', () => { syncMode(); calc(); });
+
+      $('mode').addEventListener('change', () => {
+        syncMode();
+        calc();
+      });
+
       $('btnFetch').addEventListener('click', fetchAsset);
 
       $('btnShare').addEventListener('click', async () => {
-        const text = $('quoteCard').innerText.trim();
+        const text = buildShareText();
+
         if (navigator.share) {
-          try{ await navigator.share({ title:'Quote', text }); }catch{}
+          try{
+            await navigator.share({
+              title: lastShareTitle || 'Quote',
+              text
+            });
+          }catch{}
         } else {
           await navigator.clipboard.writeText(text);
           alert('Quote copied.');
@@ -323,8 +402,14 @@
         const blob = await new Promise(r => canvas.toBlob(r,'image/png'));
         const file = new File([blob],'quote.png',{type:'image/png'});
         const title = lastShareTitle || 'Quote';
+
         if (navigator.canShare && navigator.canShare({files:[file]})) {
-          try{ await navigator.share({files:[file], title}); }catch{}
+          try{
+            await navigator.share({
+              files:[file],
+              title
+            });
+          }catch{}
         } else {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
