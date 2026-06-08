@@ -319,9 +319,7 @@
             <div class="line">${spreadLabel}: <span class="big">${up}%</span></div>
             <div class="line">Tx Fee: <span class="big">${moneyTrim(fee)}</span></div>
             <div class="line muted">${new Date().toLocaleString()}</div>
-<div class="line muted" style="font-size:0.72rem;margin-top:8px;">
-  Quote valid for 15 minutes. Price subject to market movement.
-</div>
+            <div class="line muted" style="font-size:0.72rem;margin-top:8px;">Quote valid for 15 minutes. Price subject to market movement.</div>
           </div>`;
       }
 
@@ -408,10 +406,14 @@
 
         if (navigator.canShare && navigator.canShare({files:[file]})) {
           try{
+            const shareImageText = currentQuote.side === 'sell'
+              ? `${fmtMoney(currentQuote.usdAmount)} payout\n\n${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
+              : `${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`;
+
             await navigator.share({
               files:[file],
               title,
-              text: `${fmtMoney(currentQuote.usdAmount)} payout\n\n${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
+              text: shareImageText
             });
           }catch{}
         } else {
