@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Honorquaint Quote</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
   <style>
     :root{
       --blue:#007bff;
@@ -93,6 +94,77 @@
     .quote-main .huge{font-size:1.6rem;font-weight:800}
     .quote-main .muted{color:var(--muted)}
 
+
+    .field-head{margin-bottom:.25rem}
+    .field-head label{margin-bottom:0}
+
+    .input-with-action{
+      position:relative;
+      display:block;
+    }
+
+    .input-with-action input{
+      padding-right:3rem;
+    }
+
+    .add-amount{
+      position:absolute;
+      top:50%;
+      right:.45rem;
+      transform:translateY(-50%);
+      min-width:0;
+      width:30px;
+      height:30px;
+      padding:0;
+      margin:0;
+      border-radius:50%;
+      background:var(--blue);
+      color:#fff;
+      font-size:1.25rem;
+      font-weight:500;
+      line-height:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .add-amount span{
+      display:block;
+      line-height:1;
+      transform:translateY(-1px);
+    }
+
+    .amount-list{display:grid;gap:8px}
+    .amount-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+    .amount-row:first-child{display:block}
+    .amount-row input{min-width:0}
+
+    .remove-amount{
+      min-width:0;
+      width:34px;
+      height:34px;
+      padding:0;
+      margin:0;
+      border-radius:8px;
+      background:#dc3545;
+      color:#fff;
+      font-size:1.1rem;
+      line-height:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .amount-total{
+      display:none;
+      margin-top:7px;
+      text-align:right;
+      color:var(--muted);
+      font-size:.88rem;
+      font-weight:600;
+    }
+    .amount-total.show{display:block}
+
     @media (max-width:380px){
       .btnbar button{padding:.45rem .6rem;min-width:100px;font-size:.9rem}
       .grid2{gap:8px}
@@ -139,12 +211,33 @@
 
     <!-- Row 3: Amount / Spot -->
     <div id="usdWrap" class="field">
-      <label id="usdLabel" for="amtusd">Amount (USD)</label>
-      <input id="amtusd" type="number" placeholder="Enter USD amount" />
+      <div class="field-head">
+        <label id="usdLabel" for="amtusd">Amount (USD)</label>
+      </div>
+      <div id="usdAmounts" class="amount-list">
+        <div class="amount-row">
+          <div class="input-with-action">
+            <input id="amtusd" class="amount-input usd-amount" type="number" inputmode="decimal" placeholder="Enter USD amount" />
+            <button type="button" class="add-amount" id="addUsdAmount" aria-label="Add another USD amount"><span>+</span></button>
+          </div>
+        </div>
+      </div>
+      <div id="usdTotalWrap" class="amount-total">Total: $<span id="usdTotal">0.00</span></div>
     </div>
+
     <div id="btcWrap" class="field" style="display:none">
-      <label id="btcLabel" for="amtbtc">Amount (Asset)</label>
-      <input id="amtbtc" type="number" placeholder="Enter asset amount" />
+      <div class="field-head">
+        <label id="btcLabel" for="amtbtc">Amount (Asset)</label>
+      </div>
+      <div id="assetAmounts" class="amount-list">
+        <div class="amount-row">
+          <div class="input-with-action">
+            <input id="amtbtc" class="amount-input asset-amount" type="number" inputmode="decimal" placeholder="Enter asset amount" />
+            <button type="button" class="add-amount" id="addAssetAmount" aria-label="Add another asset amount"><span>+</span></button>
+          </div>
+        </div>
+      </div>
+      <div id="assetTotalWrap" class="amount-total">Total: <span id="assetTotal">0.00000</span></div>
     </div>
 
     <div class="field">
@@ -175,19 +268,19 @@
 
       const moneyTrim = n => {
         if (!isFinite(n)) return '—';
-        const s = parseFloat(n).toLocaleString(undefined,{
-          style:'currency',currency:'USD',maximumFractionDigits:2
-        });
-        return s.replace(/\.00$/,'');
+        const fixed = Number(n).toFixed(2);
+        return `$${fixed.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}`;
       };
 
-      const fmtMoney = n => isFinite(n)
-        ? n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2})
-        : '—';
+      const fmtMoney = n => isFinite(n) ? `$${Number(n).toFixed(2)}` : '—';
 
-      const fmtAsset = n => isFinite(n)
-        ? n.toLocaleString(undefined,{minimumFractionDigits:5,maximumFractionDigits:5})
-        : '—';
+      const fmtAsset = (n, asset) => {
+        if (!isFinite(n)) return '—';
+        return Number(n).toFixed(asset === 'USDT' ? 2 : 5);
+      };
+
+      const sumInputs = selector => [...document.querySelectorAll(selector)]
+        .reduce((total, input) => total + (parseFloat(input.value) || 0), 0);
 
       const ASSET_PAIRS = {
         BTC:'XXBTZUSD',
@@ -215,6 +308,67 @@
         lineTwoText: ''
       };
 
+      const STORAGE_KEYS = {
+        asset: 'honorquaint.asset',
+        mode: 'honorquaint.mode',
+        upcharge: 'honorquaint.upcharge',
+        txfee: 'honorquaint.txfee'
+      };
+
+      function savePreferences(){
+        localStorage.setItem(STORAGE_KEYS.asset, $('assetSel').value);
+        localStorage.setItem(STORAGE_KEYS.mode, $('mode').value);
+        localStorage.setItem(STORAGE_KEYS.upcharge, $('upcharge').value);
+        localStorage.setItem(STORAGE_KEYS.txfee, $('txfee').value);
+      }
+
+      function restorePreferences(){
+        const savedAsset = localStorage.getItem(STORAGE_KEYS.asset);
+        const savedMode = localStorage.getItem(STORAGE_KEYS.mode);
+        const savedUpcharge = localStorage.getItem(STORAGE_KEYS.upcharge);
+        const savedFee = localStorage.getItem(STORAGE_KEYS.txfee);
+
+        if (savedAsset && [...$('assetSel').options].some(o => o.value === savedAsset)) $('assetSel').value = savedAsset;
+        if (savedMode && [...$('mode').options].some(o => o.value === savedMode)) $('mode').value = savedMode;
+        if (savedUpcharge !== null && savedUpcharge !== '') $('upcharge').value = savedUpcharge;
+        if (savedFee !== null && savedFee !== '') $('txfee').value = savedFee;
+      }
+
+      function updateAmountTotalsVisibility(){
+        $('usdTotalWrap').classList.toggle('show', document.querySelectorAll('.usd-amount').length > 1);
+        $('assetTotalWrap').classList.toggle('show', document.querySelectorAll('.asset-amount').length > 1);
+      }
+
+      function addAmountInput(type){
+        const isUsd = type === 'usd';
+        const list = $(isUsd ? 'usdAmounts' : 'assetAmounts');
+        const row = document.createElement('div');
+        row.className = 'amount-row';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.inputMode = 'decimal';
+        input.className = `amount-input ${isUsd ? 'usd-amount' : 'asset-amount'}`;
+        input.placeholder = isUsd ? 'Enter another USD amount' : 'Enter another asset amount';
+        input.addEventListener('input', calc);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-amount';
+        remove.setAttribute('aria-label', 'Remove amount');
+        remove.textContent = '×';
+        remove.addEventListener('click', () => {
+          row.remove();
+          updateAmountTotalsVisibility();
+          calc();
+        });
+
+        row.append(input, remove);
+        list.appendChild(row);
+        updateAmountTotalsVisibility();
+        input.focus();
+      }
+
       function getModeState(){
         const mode = $('mode').value;
         const isBuy = mode.startsWith('buy_');
@@ -239,9 +393,12 @@
         const up = parseFloat($('upcharge').value) || 0;
         const fee = parseFloat($('txfee').value) || 0;
         const { side, isUsdInput } = getModeState();
-        const usd = parseFloat($('amtusd').value) || 0;
-        const btc = parseFloat($('amtbtc').value) || 0;
+        const usd = sumInputs('.usd-amount');
+        const btc = sumInputs('.asset-amount');
         const asset= $('assetSel').value;
+
+        $('usdTotal').textContent = usd.toFixed(2);
+        $('assetTotal').textContent = fmtAsset(btc, asset);
 
         const sellPrice = spot * (1 + up/100);
         const buyPrice = Math.max(spot * (1 - up/100), 0);
@@ -269,15 +426,15 @@
           }
 
           lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
-          lineTwo = `YOU RECEIVE <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
+          lineTwo = `YOU RECEIVE <span class="huge">${fmtAsset(assetAmount, asset)}</span> <span class="muted">${asset}</span>`;
 
           lineOneText = `YOUR PAYMENT: ${fmtMoney(usdAmount)} USD`;
-          lineTwoText = `YOU RECEIVE: ${fmtAsset(assetAmount)} ${asset}`;
+          lineTwoText = `YOU RECEIVE: ${fmtAsset(assetAmount, asset)} ${asset}`;
 
           rateLabel = `${fmtMoney(sellPrice)} <span class="muted">/ ${asset}</span>`;
           rateText = `${fmtMoney(sellPrice)} / ${asset}`;
 
-          lastShareTitle = `${fmtAsset(assetAmount)} ${asset}`;
+          lastShareTitle = `${fmtAsset(assetAmount, asset)} ${asset}`;
         } else {
           if (isUsdInput){
             usdAmount = usd;
@@ -287,10 +444,10 @@
             usdAmount = Math.max((assetAmount * buyPrice) - fee, 0);
           }
 
-          lineOne = `YOU SEND <span class="huge">${fmtAsset(assetAmount)}</span> <span class="muted">${asset}</span>`;
+          lineOne = `YOU SEND <span class="huge">${fmtAsset(assetAmount, asset)}</span> <span class="muted">${asset}</span>`;
           lineTwo = `YOU RECEIVE <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
 
-          lineOneText = `YOU SEND: ${fmtAsset(assetAmount)} ${asset}`;
+          lineOneText = `YOU SEND: ${fmtAsset(assetAmount, asset)} ${asset}`;
           lineTwoText = `YOU RECEIVE: ${fmtMoney(usdAmount)} USD`;
 
           rateLabel = `${fmtMoney(buyPrice)} <span class="muted">/ ${asset}</span>`;
@@ -372,13 +529,26 @@
         return lines.filter(Boolean).join('\n');
       }
 
-      $('assetSel').addEventListener('change', fetchAsset);
-      ['spot','upcharge','txfee','amtusd','amtbtc'].forEach(id => $(id).addEventListener('input', calc));
+      $('assetSel').addEventListener('change', () => {
+        savePreferences();
+        fetchAsset();
+      });
+
+      ['spot','amtusd','amtbtc'].forEach(id => $(id).addEventListener('input', calc));
+
+      ['upcharge','txfee'].forEach(id => $(id).addEventListener('input', () => {
+        savePreferences();
+        calc();
+      }));
 
       $('mode').addEventListener('change', () => {
+        savePreferences();
         syncMode();
         calc();
       });
+
+      $('addUsdAmount').addEventListener('click', () => addAmountInput('usd'));
+      $('addAssetAmount').addEventListener('click', () => addAmountInput('asset'));
 
       $('btnFetch').addEventListener('click', fetchAsset);
 
@@ -409,8 +579,8 @@
             const shareImageText = currentQuote.side === 'buy'
               ? `${fmtMoney(currentQuote.usdAmount)} payout
 
-${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
-              : `${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`;
+${fmtAsset(currentQuote.assetAmount, currentQuote.asset)} ${currentQuote.asset}`
+              : `${fmtAsset(currentQuote.assetAmount, currentQuote.asset)} ${currentQuote.asset}`;
 
             await navigator.share({
               files:[file],
@@ -427,9 +597,15 @@ ${fmtAsset(currentQuote.assetAmount)} ${currentQuote.asset}`
         }
       });
 
+      restorePreferences();
       syncMode();
+      updateAmountTotalsVisibility();
       fetchAsset();
       startAutoRefresh();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+      }
     });
   </script>
 </body>
