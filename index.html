@@ -400,12 +400,8 @@
         $('usdTotal').textContent = usd.toFixed(2);
         $('assetTotal').textContent = fmtAsset(btc, asset);
 
-        // Treat the upcharge as a percentage of the customer's transaction amount.
-        // Example: $1,000 at 7% plus a $1.50 fee leaves $928.50 to convert at spot.
-        const upRate = up / 100;
-        const sellFactor = Math.max(1 - upRate, 0);
-        const sellPrice = sellFactor > 0 ? spot / sellFactor : 0;
-        const buyPrice = Math.max(spot * (1 - upRate), 0);
+        const sellPrice = spot * (1 + up/100);
+        const buyPrice = Math.max(spot * (1 - up/100), 0);
 
         let usdAmount = 0;
         let assetAmount = 0;
@@ -421,12 +417,12 @@
 
         if (side === 'sell'){
           if (isUsdInput){
-            const net = Math.max((usd * sellFactor) - fee, 0);
+            const net = Math.max(usd - fee, 0);
             usdAmount = usd;
-            assetAmount = spot ? net / spot : 0;
+            assetAmount = sellPrice ? net / sellPrice : 0;
           } else {
             assetAmount = btc;
-            usdAmount = sellFactor > 0 ? ((assetAmount * spot) + fee) / sellFactor : 0;
+            usdAmount = (assetAmount * sellPrice) + fee;
           }
 
           lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
