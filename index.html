@@ -214,7 +214,7 @@
       <label for="paymentMethod">Payment method</label>
       <select id="paymentMethod">
         <option value="standard">No card fee</option>
-        <option value="card">Credit / Debit (+2.99% + $0.49)</option>
+        <option value="card">Credit / Debit (2.99% + $0.49 deducted)</option>
       </select>
     </div>
 
@@ -394,11 +394,11 @@
         $('paymentWrap').style.display = side === 'sell' ? 'block' : 'none';
         if (side !== 'sell') $('paymentMethod').value = 'standard';
         const cardSelected = side === 'sell' && $('paymentMethod').value === 'card';
-        $('usdLabel').textContent = side === 'sell' ? (cardSelected ? 'Amount (USD before card fee)' : 'Amount (USD)') : 'Receive Amount (USD)';
+        $('usdLabel').textContent = side === 'sell' ? 'Amount (USD)' : 'Receive Amount (USD)';
         $('amtusd').placeholder = side === 'sell' ? 'Enter USD amount' : 'Enter USD amount to receive';
 
-        $('btcLabel').textContent = side === 'sell' ? 'Amount (Asset)' : 'Sell Amount (Asset)';
-        $('amtbtc').placeholder = side === 'sell' ? 'Enter asset amount' : 'Enter asset amount to sell';
+        $('btcLabel').textContent = side === 'sell' ? (cardSelected ? 'Amount (Asset before card fee)' : 'Amount (Asset)') : 'Sell Amount (Asset)';
+        $('amtbtc').placeholder = side === 'sell' ? (cardSelected ? 'Enter asset amount before card fee' : 'Enter asset amount') : 'Enter asset amount to sell';
       }
 
       function calc(){
@@ -418,7 +418,6 @@
 
         let usdAmount = 0;
         let assetAmount = 0;
-        let basePayment = 0;
         let cardFee = 0;
         let cardFeeApplied = false;
         let lineOne = '';
@@ -441,12 +440,13 @@
             usdAmount = (assetAmount * sellPrice) + fee;
           }
 
-          // Card fee is added on top, without changing the asset amount.
-          basePayment = usdAmount;
+          // Keep the customer's USD payment fixed. Deduct the card fee
+          // from the funds available for crypto, in both sell input modes.
           cardFeeApplied = $('paymentMethod').value === 'card';
-          if (cardFeeApplied && basePayment > 0) {
-            cardFee = Math.round((basePayment * 0.0299 + 0.49 + Number.EPSILON) * 100) / 100;
-            usdAmount = basePayment + cardFee;
+          if (cardFeeApplied && usdAmount > 0) {
+            cardFee = Math.round((usdAmount * 0.0299 + 0.49 + Number.EPSILON) * 100) / 100;
+            const netForAsset = Math.max(usdAmount - fee - cardFee, 0);
+            assetAmount = sellPrice ? netForAsset / sellPrice : 0;
           }
 
           lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
@@ -488,7 +488,6 @@
           rateText,
           up,
           feeText: moneyTrim(fee),
-          basePayment,
           cardFee,
           cardFeeApplied,
           lineOneText,
@@ -496,8 +495,7 @@
         };
 
         const cardFeeDetails = cardFeeApplied
-          ? `<div class="line">Subtotal before card fee: <span class="big">${fmtMoney(basePayment)}</span></div>
-             <div class="line">Credit/Debit Fee (2.99% + $0.49): <span class="big">${fmtMoney(cardFee)}</span></div>`
+          ? `<div class="line">Credit/Debit Fee (2.99% + $0.49): <span class="big">${fmtMoney(cardFee)}</span> <span class="muted">(deducted from payment)</span></div>`
           : '';
 
         $('qBox').innerHTML = `
@@ -557,8 +555,7 @@
           currentQuote.rateText,
           `Upcharge: ${currentQuote.up}%`,
           `Tx Fee: ${currentQuote.feeText}`,
-          currentQuote.cardFeeApplied ? `Subtotal before card fee: ${fmtMoney(currentQuote.basePayment)}` : '',
-          currentQuote.cardFeeApplied ? `Credit/Debit Fee (2.99% + $0.49): ${fmtMoney(currentQuote.cardFee)}` : ''
+          currentQuote.cardFeeApplied ? `Credit/Debit Fee (2.99% + $0.49): ${fmtMoney(currentQuote.cardFee)} (deducted from payment)` : ''
         ];
 
         return lines.filter(Boolean).join('\n');
