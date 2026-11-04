@@ -184,6 +184,7 @@
           <option value="XMR">XMR</option>
           <option value="ETH">ETH</option>
           <option value="USDT">USDT</option>
+          <option value="USDC">USDC</option>
         </select>
       </div>
       <div class="field">
@@ -276,7 +277,7 @@
 
       const fmtAsset = (n, asset) => {
         if (!isFinite(n)) return '—';
-        return Number(n).toFixed(asset === 'USDT' ? 2 : 5);
+        return Number(n).toFixed((asset === 'USDT' || asset === 'USDC') ? 2 : 5);
       };
 
       const sumInputs = selector => [...document.querySelectorAll(selector)]
@@ -288,7 +289,8 @@
         SOL:'SOLUSD',
         XMR:'XXMRZUSD',
         ETH:'XETHZUSD',
-        USDT:'USDTZUSD'
+        USDT:'USDTZUSD',
+        USDC:'USDCUSD'
       };
 
       let countdown = 60;
