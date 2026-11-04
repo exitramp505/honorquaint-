@@ -210,6 +210,14 @@
       </div>
     </div>
 
+    <div id="paymentWrap" class="field">
+      <label for="paymentMethod">Payment method</label>
+      <select id="paymentMethod">
+        <option value="standard">No card fee</option>
+        <option value="card">Credit / Debit (+2.99% + $0.49)</option>
+      </select>
+    </div>
+
     <!-- Row 3: Amount / Spot -->
     <div id="usdWrap" class="field">
       <div class="field-head">
@@ -383,7 +391,10 @@
         $('usdWrap').style.display = isUsdInput ? 'block' : 'none';
         $('btcWrap').style.display = isUsdInput ? 'none' : 'block';
 
-        $('usdLabel').textContent = side === 'sell' ? 'Amount (USD)' : 'Receive Amount (USD)';
+        $('paymentWrap').style.display = side === 'sell' ? 'block' : 'none';
+        if (side !== 'sell') $('paymentMethod').value = 'standard';
+        const cardSelected = side === 'sell' && $('paymentMethod').value === 'card';
+        $('usdLabel').textContent = side === 'sell' ? (cardSelected ? 'Amount (USD before card fee)' : 'Amount (USD)') : 'Receive Amount (USD)';
         $('amtusd').placeholder = side === 'sell' ? 'Enter USD amount' : 'Enter USD amount to receive';
 
         $('btcLabel').textContent = side === 'sell' ? 'Amount (Asset)' : 'Sell Amount (Asset)';
@@ -407,6 +418,9 @@
 
         let usdAmount = 0;
         let assetAmount = 0;
+        let basePayment = 0;
+        let cardFee = 0;
+        let cardFeeApplied = false;
         let lineOne = '';
         let lineTwo = '';
         let lineOneText = '';
@@ -425,6 +439,14 @@
           } else {
             assetAmount = btc;
             usdAmount = (assetAmount * sellPrice) + fee;
+          }
+
+          // Card fee is added on top, without changing the asset amount.
+          basePayment = usdAmount;
+          cardFeeApplied = $('paymentMethod').value === 'card';
+          if (cardFeeApplied && basePayment > 0) {
+            cardFee = Math.round((basePayment * 0.0299 + 0.49 + Number.EPSILON) * 100) / 100;
+            usdAmount = basePayment + cardFee;
           }
 
           lineOne = `YOUR PAYMENT <span class="big">${fmtMoney(usdAmount)}</span> <span class="muted">USD</span>`;
@@ -466,9 +488,17 @@
           rateText,
           up,
           feeText: moneyTrim(fee),
+          basePayment,
+          cardFee,
+          cardFeeApplied,
           lineOneText,
           lineTwoText
         };
+
+        const cardFeeDetails = cardFeeApplied
+          ? `<div class="line">Subtotal before card fee: <span class="big">${fmtMoney(basePayment)}</span></div>
+             <div class="line">Credit/Debit Fee (2.99% + $0.49): <span class="big">${fmtMoney(cardFee)}</span></div>`
+          : '';
 
         $('qBox').innerHTML = `
           <div class="quote-main">
@@ -477,6 +507,7 @@
             <div class="line">${rateLabel}</div>
             <div class="line">${spreadLabel}: <span class="big">${up}%</span></div>
             <div class="line">Tx Fee: <span class="big">${moneyTrim(fee)}</span></div>
+            ${cardFeeDetails}
             <div class="line muted">${new Date().toLocaleString()}</div>
             <div class="line muted" style="font-size:0.72rem;margin-top:8px;">Quote valid for 15 minutes. Price subject to market movement.</div>
           </div>`;
@@ -525,7 +556,9 @@
           currentQuote.lineTwoText,
           currentQuote.rateText,
           `Upcharge: ${currentQuote.up}%`,
-          `Tx Fee: ${currentQuote.feeText}`
+          `Tx Fee: ${currentQuote.feeText}`,
+          currentQuote.cardFeeApplied ? `Subtotal before card fee: ${fmtMoney(currentQuote.basePayment)}` : '',
+          currentQuote.cardFeeApplied ? `Credit/Debit Fee (2.99% + $0.49): ${fmtMoney(currentQuote.cardFee)}` : ''
         ];
 
         return lines.filter(Boolean).join('\n');
@@ -545,6 +578,11 @@
 
       $('mode').addEventListener('change', () => {
         savePreferences();
+        syncMode();
+        calc();
+      });
+
+      $('paymentMethod').addEventListener('change', () => {
         syncMode();
         calc();
       });

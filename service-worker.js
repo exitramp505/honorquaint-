@@ -1,4 +1,4 @@
-const CACHE_NAME = "honorquaint-quote-v5";
+const CACHE_NAME = "honorquaint-quote-v6";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
